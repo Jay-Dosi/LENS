@@ -1,0 +1,26 @@
+{
+  "facility_mapping": {
+    "Example Manufacturing Plant": {
+      "latitude": 37.7749,
+      "longitude": -122.4194,
+      "address": "San Francisco, CA, USA",
+      "facility_type": "manufacturing",
+      "description": "Primary manufacturing facility"
+    },
+    "Example Distribution Center": {
+      "latitude": 40.7128,
+      "longitude": -74.0060,
+      "address": "New York, NY, USA",
+      "facility_type": "distribution",
+      "description": "East Coast distribution hub"
+    },
+    "Example Production Facility": {
+      "latitude": 51.5074,
+      "longitude": -0.1278,
+      "address": "London, UK",
+      "facility_type": "production",
+      "description": "European production facility"
+    }
+  },
+  "instructions": "This is a sample facility mapping file. For the hackathon demo, replace these entries with actual facility names and coordinates from the company in your selected sustainability report. Each facility should have: latitude, longitude, address, facility_type, and description."
+}
