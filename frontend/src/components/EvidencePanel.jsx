@@ -1,4 +1,29 @@
-export default function EvidencePanel({ claim, evidence, riskScore }) {
+import { useMemo } from 'react';
+
+export default function EvidencePanel({ claim, evidence, mapData, riskScore }) {
+  // Memoize filtered evidence to prevent recalculation on every render
+  const claimEvidence = useMemo(() => {
+    if (!claim || !evidence) return [];
+    return evidence.filter(e => e.claim_id === claim.claim_id);
+  }, [claim, evidence]);
+
+  // Find location data for the current claim from mapData
+  const claimLocation = useMemo(() => {
+    if (!claim || !mapData || !mapData.locations) return null;
+    
+    // Try to match by facility name first
+    const location = mapData.locations.find(loc =>
+      loc.facility_name === claim.facility_name
+    );
+    
+    // If no match and only one location, use it
+    if (!location && mapData.locations.length === 1) {
+      return mapData.locations[0];
+    }
+    
+    return location;
+  }, [claim, mapData]);
+
   if (!claim) {
     return (
       <div className="bg-gray-700 rounded-lg p-8 text-center">
@@ -10,8 +35,6 @@ export default function EvidencePanel({ claim, evidence, riskScore }) {
       </div>
     );
   }
-
-  const claimEvidence = evidence.filter(e => e.claim_id === claim.claim_id);
 
   const getSignalIcon = (signalType) => {
     switch (signalType) {
@@ -54,15 +77,58 @@ export default function EvidencePanel({ claim, evidence, riskScore }) {
         )}
       </div>
 
-      {/* Map Placeholder */}
-      <div className="bg-gray-700 rounded-lg h-64 flex flex-col items-center justify-center">
-        <svg className="w-12 h-12 text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-        </svg>
-        <p className="text-gray-400 text-sm">Facility Location Map</p>
-        <p className="text-xs text-gray-500 mt-1">
-          {claim.facility_name || 'Location data pending'}
-        </p>
+      {/* Map Display */}
+      <div className="bg-gray-700 rounded-lg p-4">
+        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Facility Location
+        </h3>
+        
+        {claimLocation ? (
+          <div className="space-y-2">
+            <div className="bg-gray-800 p-3 rounded">
+              <p className="text-sm font-semibold text-blue-400">{claimLocation.facility_name || claim.facility_name || 'Facility'}</p>
+              <p className="text-xs text-gray-400 mt-1">{claimLocation.address || claim.location || 'Location available'}</p>
+              <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                <span>Lat: {claimLocation.latitude.toFixed(4)}</span>
+                <span>Lon: {claimLocation.longitude.toFixed(4)}</span>
+              </div>
+              {claimLocation.claim_count > 1 && (
+                <p className="text-xs text-blue-400 mt-1">
+                  📍 {claimLocation.claim_count} claims at this location
+                </p>
+              )}
+            </div>
+            
+            {mapData && mapData.total_locations > 0 && (
+              <div className="text-xs text-gray-400">
+                <p>📍 {mapData.total_locations} location{mapData.total_locations !== 1 ? 's' : ''} identified across all claims</p>
+              </div>
+            )}
+            
+            <div className="bg-gray-800 rounded h-32 flex items-center justify-center">
+              <div className="text-center">
+                <svg className="w-8 h-8 text-gray-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                <p className="text-xs text-gray-500">Interactive map available with Leaflet/Mapbox</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-800 p-4 rounded text-center">
+            <svg className="w-8 h-8 text-gray-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            <p className="text-xs text-gray-400">{claim.facility_name || 'Facility location'}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {mapData ? 'No coordinates available for this facility' : 'Loading location data...'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Evidence Cards */}

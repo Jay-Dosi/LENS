@@ -7,8 +7,14 @@ pydantic-settings==2.1.0
 
 # IBM Cloud SDKs
 ibm-watsonx-ai==0.2.6
-ibm-cos-sdk==2.13.4
 ibm-watson==8.0.0
+
+# Storage - ChromaDB for in-memory/local storage (FREE, no external services)
+chromadb==0.4.22
+aiofiles==23.2.1  # Async file operations
+
+# NLP - IBM Watson NLU (cloud-based entity extraction)
+# No additional packages needed - included in ibm-watson SDK
 
 # PDF processing
 PyMuPDF==1.23.8
@@ -16,6 +22,9 @@ pdfplumber==0.10.3
 
 # HTTP client for external APIs
 httpx==0.26.0
+
+# RSS feed parsing
+feedparser==6.0.11
 
 # Utilities
 python-dotenv==1.0.0

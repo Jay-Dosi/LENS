@@ -1,8 +1,8 @@
 # ESG Claim Verification Assistant
 
-**IBM Dev Day Hackathon Submission**
+**Production-Grade Greenwashing Detection Tool**
 
-An AI-powered greenwashing risk detection tool that verifies corporate sustainability claims against publicly available satellite and news data.
+An AI-powered greenwashing risk detection tool that verifies corporate sustainability claims against publicly available satellite and news data. Built with **watsonx.ai** and open-source technologies for production deployment.
 
 ---
 
@@ -12,11 +12,13 @@ The ESG Claim Verification Assistant ingests corporate sustainability reports (P
 
 **Key Features:**
 - 📄 PDF text extraction with intelligent chunking
-- 🤖 AI-powered claim extraction using IBM Granite models
+- 🤖 AI-powered claim extraction using IBM Granite models (watsonx.ai)
+- 🔍 Production-grade entity extraction using IBM Watson NLU
 - 🛰️ Satellite thermal anomaly detection via NASA FIRMS
 - 📰 News sentiment analysis via GDELT
 - 📊 Transparent risk scoring with explainable results
 - 🗺️ Interactive facility mapping and evidence visualization
+- 💾 Flexible storage: Local filesystem, AWS S3, Azure Blob, or MinIO
 
 ---
 
@@ -25,12 +27,14 @@ The ESG Claim Verification Assistant ingests corporate sustainability reports (P
 ### Technology Stack
 
 **Backend (Python)**
-- FastAPI - Async REST API framework
-- IBM watsonx.ai - Granite 13B & 8B models for claim extraction and explanation
-- IBM Cloud Object Storage - Document and data storage
-- IBM Watson NLU - Entity extraction for facility resolution
-- PyMuPDF - PDF text extraction
-- httpx - Async HTTP client for external APIs
+- **FastAPI** - Async REST API framework
+- **IBM watsonx.ai** - Granite 13B & 8B models for claim extraction and explanation
+- **IBM Watson NLU** - Cloud-based entity extraction and NER
+- **Local/S3 Storage** - Flexible storage backend
+  - Local filesystem for development
+  - AWS S3, Azure Blob Storage, or MinIO for production
+- **PyMuPDF** - PDF text extraction
+- **httpx** - Async HTTP client for external APIs
 
 **Frontend (React)**
 - React + Vite - Fast build tooling
@@ -40,32 +44,39 @@ The ESG Claim Verification Assistant ingests corporate sustainability reports (P
 
 **Deployment**
 - Docker - Containerization
-- IBM Cloud Code Engine - Serverless deployment
+- Multiple deployment options: AWS, Azure, GCP, Heroku, Railway, or self-hosted
 
 ---
 
 ## 📋 Prerequisites
 
-### IBM Cloud Services (All Free Tier)
+### Required Services
 
 1. **IBM Cloud Account** - [Sign up here](https://cloud.ibm.com/registration)
 
 2. **IBM watsonx.ai** (Lite Plan - 10 CUH/month)
-   - Create a watsonx.ai project
+   - Create a watsonx.ai project at [watsonx.ai](https://dataplatform.cloud.ibm.com/wx/home)
    - Note your Project ID and API Key
+   - Free tier: 10 CUH/month (~100 pages of processing)
 
-3. **IBM Cloud Object Storage** (Lite Plan - 5GB)
-   - Create a bucket named `esg-lens-hackathon`
-   - Note your API Key, Instance CRN, and Endpoint
+3. **IBM Watson NLU** (Lite Plan - 30,000 items/month)
+   - Create a Watson NLU service in IBM Cloud
+   - Get your API Key and Service URL
+   - Free tier: 30,000 NLU items/month
+   - See [Watson NLU Setup Guide](docs/WATSON_NLU_SETUP.md) for detailed instructions
 
-4. **IBM Watson Natural Language Understanding** (Lite Plan - 30K items/month)
-   - Create an NLU instance
-   - Note your API Key and URL
+### Optional Services (Choose One for Production)
+
+3. **Storage Backend** (Choose one):
+   - **Local Filesystem** (Development) - No setup required
+   - **AWS S3** (Production) - Free tier: 5GB storage
+   - **Azure Blob Storage** (Production) - Free tier: 5GB storage
+   - **MinIO** (Self-hosted) - Free, S3-compatible
 
 ### Local Development
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 18+ (for frontend)
 - Docker (optional, for containerized deployment)
 
 ---
@@ -96,35 +107,42 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Download spaCy model for NER
+python -m spacy download en_core_web_sm
+
 # Copy environment template
 copy .env.example .env  # Windows
 cp .env.example .env    # macOS/Linux
 
-# Edit .env with your IBM Cloud credentials
+# Edit .env with your IBM watsonx.ai credentials
 ```
 
 **Required Environment Variables:**
 
 ```env
-# IBM Cloud Configuration
+# IBM watsonx.ai (REQUIRED - Only IBM service needed)
 IBM_CLOUD_API_KEY=your_ibm_cloud_api_key_here
 IBM_WATSONX_PROJECT_ID=your_watsonx_project_id_here
-
-# IBM Cloud Object Storage
-IBM_COS_ENDPOINT=https://s3.us-south.cloud-object-storage.appdomain.cloud
-IBM_COS_API_KEY=your_cos_api_key_here
-IBM_COS_INSTANCE_CRN=your_cos_instance_crn_here
-IBM_COS_BUCKET_NAME=esg-lens-hackathon
-
-# IBM Watson Natural Language Understanding
-IBM_NLU_API_KEY=your_nlu_api_key_here
-IBM_NLU_URL=https://api.us-south.natural-language-understanding.watson.cloud.ibm.com
-
-# watsonx.ai Configuration
 WATSONX_URL=https://us-south.ml.cloud.ibm.com
 WATSONX_EXTRACTION_MODEL=ibm/granite-13b-instruct-v2
 WATSONX_EXPLANATION_MODEL=ibm/granite-3-8b-instruct
+
+# Storage Backend (local for development, s3 for production)
+STORAGE_BACKEND=local
+STORAGE_LOCAL_PATH=./storage
+
+# NLU Configuration (spaCy - open source)
+SPACY_MODEL=en_core_web_sm
+
+# Optional: For production with S3
+# STORAGE_BACKEND=s3
+# STORAGE_S3_BUCKET=your-bucket-name
+# STORAGE_S3_REGION=us-east-1
+# STORAGE_S3_ACCESS_KEY=your_access_key
+# STORAGE_S3_SECRET_KEY=your_secret_key
 ```
+
+**For detailed production setup, see [PRODUCTION_SETUP.md](docs/PRODUCTION_SETUP.md)**
 
 ### 3. Run the Backend
 
@@ -295,12 +313,11 @@ Edit `config/facility_mapping.json` to add known facility locations for your dem
 3. Use local PDF extraction to save CUH
 4. Cache results during rehearsal
 
-**IBM Watson NLU Lite Plan Limits:**
-- 30,000 NLU items per month
-
-**Mitigation:**
-- Use NLU only for short text segments
-- Limit facility extraction to first 5000 characters
+**spaCy (Open Source):**
+- No quota limits
+- Runs locally
+- Fast and efficient
+- Production-grade accuracy
 
 ---
 
@@ -374,14 +391,21 @@ ibmcloud ce application create \
 ## 📊 System Workflow
 
 ```
-1. Document Ingest → Upload PDF to IBM COS
-2. Text Parsing → Extract and chunk text locally
+1. Document Ingest → Upload PDF to local/S3 storage
+2. Text Parsing → Extract and chunk text locally (PyMuPDF)
 3. Claim Extraction → watsonx.ai Granite 13B extracts claims
-4. Facility Resolution → Watson NLU identifies locations
-5. Evidence Collection → Query NASA FIRMS + GDELT
+4. Facility Resolution → spaCy NER identifies locations and entities
+5. Evidence Collection → Query NASA FIRMS + GDELT (free APIs)
 6. Risk Scoring → Transparent heuristic calculation
 7. Explanation → watsonx.ai Granite 8B generates summary
 ```
+
+**Key Improvements:**
+- ✅ Only watsonx.ai requires IBM Cloud
+- ✅ spaCy provides production-grade NER without API limits
+- ✅ Flexible storage supports multiple backends
+- ✅ All external data sources are free
+- ✅ Easy to deploy anywhere
 
 ---
 
@@ -419,11 +443,21 @@ ibmcloud ce application create \
 
 ## 📚 Additional Resources
 
+### Documentation
+- [Production Setup Guide](docs/PRODUCTION_SETUP.md) - Detailed deployment instructions
+- [API Setup Guide](docs/API_SETUP_GUIDE.md) - API configuration details
+- [Quick Start Guide](docs/QUICK_START.md) - Get started quickly
+
+### External Services
 - [IBM watsonx.ai Documentation](https://www.ibm.com/docs/en/watsonx-as-a-service)
-- [IBM Cloud Object Storage Docs](https://cloud.ibm.com/docs/cloud-object-storage)
-- [IBM Watson NLU Docs](https://cloud.ibm.com/docs/natural-language-understanding)
-- [NASA FIRMS API](https://firms.modaps.eosdis.nasa.gov/api/)
-- [GDELT Project](https://www.gdeltproject.org/)
+- [spaCy Documentation](https://spacy.io/usage) - NER and NLP
+- [NASA FIRMS API](https://firms.modaps.eosdis.nasa.gov/api/) - Satellite data
+- [GDELT Project](https://www.gdeltproject.org/) - News data
+
+### Storage Options
+- [AWS S3 Documentation](https://docs.aws.amazon.com/s3/)
+- [Azure Blob Storage](https://docs.microsoft.com/azure/storage/blobs/)
+- [MinIO Documentation](https://min.io/docs/minio/linux/index.html) - Self-hosted S3
 
 ---
 
@@ -441,13 +475,36 @@ Built with ❤️ for IBM Dev Day Hackathon
 
 ## 🎯 Success Criteria
 
-✅ PDF upload and claim extraction in <60 seconds  
-✅ At least one claim linked to a mappable facility  
-✅ At least one external signal retrieved and displayed  
-✅ Risk score with visible breakdown  
-✅ Natural language explanation citing specific evidence  
-✅ All services on IBM Cloud free tier  
+✅ PDF upload and claim extraction in <60 seconds
+✅ At least one claim linked to a mappable facility
+✅ At least one external signal retrieved and displayed
+✅ Risk score with visible breakdown
+✅ Natural language explanation citing specific evidence
+✅ **Only watsonx.ai from IBM Cloud required**
+✅ **Production-grade with open-source alternatives**
+✅ **Easy deployment to any cloud or on-premises**
 
 ---
 
-**Ready to detect greenwashing? Let's go! 🚀**
+## 🚀 What's New in This Version
+
+### Production-Ready Architecture
+- ✅ **Simplified IBM Cloud dependency** - Only watsonx.ai required
+- ✅ **Open-source NER** - spaCy replaces IBM Watson NLU
+- ✅ **Flexible storage** - Local, AWS S3, Azure Blob, or MinIO
+- ✅ **No vendor lock-in** - Deploy anywhere
+- ✅ **Cost-effective** - Minimal cloud costs
+- ✅ **Production-grade** - Battle-tested open-source components
+
+### Key Benefits
+1. **Lower Costs** - Only pay for watsonx.ai usage
+2. **Better Performance** - spaCy runs locally, no API latency
+3. **More Flexible** - Choose your storage backend
+4. **Easier Deployment** - Fewer dependencies to configure
+5. **Production Ready** - Proven technologies at scale
+
+---
+
+**Ready to detect greenwashing in production? Let's go! 🚀**
+
+For detailed setup instructions, see [PRODUCTION_SETUP.md](docs/PRODUCTION_SETUP.md)

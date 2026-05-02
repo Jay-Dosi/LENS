@@ -1,12 +1,12 @@
 """
-FastAPI Routes - API Endpoints
+FastAPI Routes - API Endpoints with Session Management
 """
 import os
 import uuid
 import logging
-from typing import List
+from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Header
 from fastapi.responses import JSONResponse
 
 from app.models.schemas import (
@@ -32,10 +32,138 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Session Management Endpoints
+
+@router.post("/session/create")
+async def create_session():
+    """
+    Create a new session for stateless storage
+    
+    Returns:
+        Session ID and info
+    """
+    try:
+        storage = get_storage_service()
+        session_id = storage.create_session()
+        
+        return {
+            "session_id": session_id,
+            "message": "Session created successfully",
+            "timeout_minutes": 60
+        }
+    except Exception as e:
+        logger.error(f"Error creating session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/session/{session_id}")
+async def get_session_info(session_id: str):
+    """
+    Get session information
+    
+    Args:
+        session_id: Session identifier
+        
+    Returns:
+        Session info
+    """
+    try:
+        storage = get_storage_service()
+        session_info = storage.get_session_info(session_id)
+        
+        if not session_info:
+            raise HTTPException(status_code=404, detail="Session not found or expired")
+        
+        return session_info
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting session info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/session/{session_id}")
+async def cleanup_session(session_id: str):
+    """
+    Clean up a session and all its data
+    
+    Args:
+        session_id: Session identifier
+        
+    Returns:
+        Cleanup status
+    """
+    try:
+        storage = get_storage_service()
+        success = storage.cleanup_session(session_id)
+        
+        if success:
+            return {
+                "message": "Session cleaned up successfully",
+                "session_id": session_id
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Session not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cleaning up session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/cleanup-expired")
+async def cleanup_expired_sessions():
+    """
+    Clean up all expired sessions (admin endpoint)
+    
+    Returns:
+        Number of sessions cleaned up
+    """
+    try:
+        storage = get_storage_service()
+        count = storage.cleanup_expired_sessions()
+        
+        return {
+            "message": f"Cleaned up {count} expired sessions",
+            "count": count
+        }
+    except Exception as e:
+        logger.error(f"Error cleaning up expired sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/reset")
+async def reset_all_data():
+    """
+    Reset all data (for demo/testing)
+    WARNING: This will delete ALL data
+    
+    Returns:
+        Reset status
+    """
+    try:
+        storage = get_storage_service()
+        success = storage.reset_all_data()
+        
+        if success:
+            return {
+                "message": "All data reset successfully",
+                "warning": "All sessions and data have been cleared"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to reset data")
+    except Exception as e:
+        logger.error(f"Error resetting data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Document Processing Endpoints
+
 @router.post("/upload", response_model=UploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    company_name: str = "Unknown Company"
+    company_name: str = "Unknown Company",
+    session_id: Optional[str] = Header(None, alias="X-Session-ID")
 ) -> UploadResponse:
     """
     Stage 1: Upload a sustainability report PDF
@@ -43,11 +171,22 @@ async def upload_document(
     Args:
         file: PDF file upload
         company_name: Name of the reporting company
+        session_id: Session ID (from X-Session-ID header)
         
     Returns:
         UploadResponse with document ID and status
     """
     try:
+        # Create session if not provided
+        storage = get_storage_service()
+        if not session_id:
+            session_id = storage.create_session()
+            logger.info(f"Created new session: {session_id}")
+        else:
+            # Validate session exists
+            if not storage.get_session_info(session_id):
+                raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
         # Validate file type
         if not file.filename.endswith('.pdf'):
             raise HTTPException(
@@ -73,10 +212,9 @@ async def upload_document(
         with open(local_path, 'wb') as f:
             f.write(file_content)
         
-        # Upload to IBM Cloud Object Storage
-        storage = get_storage_service()
+        # Upload to storage with session
         object_key = f"uploads/{document_id}.pdf"
-        file_url = storage.upload_file(local_path, object_key)
+        file_url = storage.upload_file(session_id, local_path, object_key)
         
         # Store document metadata
         document_metadata = {
@@ -85,22 +223,24 @@ async def upload_document(
             "company_name": company_name,
             "uploaded_at": datetime.now().isoformat(),
             "file_url": file_url,
-            "status": "uploaded"
+            "status": "uploaded",
+            "session_id": session_id
         }
         
         storage.upload_json(
+            session_id,
             document_metadata,
             f"metadata/{document_id}.json"
         )
         
-        logger.info(f"Document uploaded: {document_id}")
+        logger.info(f"Document uploaded: {document_id} (session: {session_id})")
         
         return UploadResponse(
             document_id=document_id,
             filename=file.filename,
             file_url=file_url,
             status="uploaded",
-            message="Document uploaded successfully"
+            message=f"Document uploaded successfully (session: {session_id})"
         )
         
     except Exception as e:
@@ -109,18 +249,33 @@ async def upload_document(
 
 
 @router.post("/extract-claims", response_model=ClaimExtractionResponse)
-async def extract_claims(document_id: str) -> ClaimExtractionResponse:
+async def extract_claims(
+    document_id: str,
+    session_id: Optional[str] = Header(None, alias="X-Session-ID")
+) -> ClaimExtractionResponse:
     """
     Stages 2 & 3: Extract text and claims from uploaded document
     
     Args:
         document_id: Document identifier
+        session_id: Session ID (from X-Session-ID header)
         
     Returns:
         ClaimExtractionResponse with extracted claims
     """
     try:
         storage = get_storage_service()
+        
+        # Get session from metadata if not provided
+        if not session_id:
+            metadata = storage.download_json(f"metadata/{document_id}.json")
+            session_id = metadata.get("session_id")
+            if not session_id:
+                raise HTTPException(status_code=401, detail="Session ID required")
+        
+        # Validate session
+        if not storage.get_session_info(session_id):
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
         
         # Download PDF from storage
         local_path = os.path.join(settings.upload_dir, f"{document_id}.pdf")
@@ -132,6 +287,7 @@ async def extract_claims(document_id: str) -> ClaimExtractionResponse:
         
         # Store extracted text
         storage.upload_json(
+            session_id,
             {"pages": pages, "chunks": candidate_chunks},
             f"text/{document_id}.json"
         )
@@ -154,6 +310,7 @@ async def extract_claims(document_id: str) -> ClaimExtractionResponse:
         # Store claims
         claims_data = [claim.dict() for claim in all_claims]
         storage.upload_json(
+            session_id,
             {"claims": claims_data},
             f"claims/{document_id}.json"
         )
@@ -173,15 +330,19 @@ async def extract_claims(document_id: str) -> ClaimExtractionResponse:
 
 
 @router.post("/verify", response_model=VerificationResponse)
-async def verify_claims(document_id: str) -> VerificationResponse:
+async def verify_claims(
+    document_id: str,
+    session_id: Optional[str] = Header(None, alias="X-Session-ID")
+) -> VerificationResponse:
     """
     Stages 4 & 5: Resolve facilities and collect external evidence
     
     Args:
         document_id: Document identifier
+        session_id: Session ID (from X-Session-ID header)
         
     Returns:
-        VerificationResponse with evidence
+        VerificationResponse with evidence and facility data
     """
     try:
         storage = get_storage_service()
@@ -194,12 +355,31 @@ async def verify_claims(document_id: str) -> VerificationResponse:
         metadata = storage.download_json(f"metadata/{document_id}.json")
         company_name = metadata.get("company_name", "Unknown Company")
         
+        # Get session from metadata if not provided
+        if not session_id:
+            session_id = metadata.get("session_id")
+            if not session_id:
+                raise HTTPException(status_code=401, detail="Session ID required")
+        
+        # Validate session
+        if not storage.get_session_info(session_id):
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
         # Stage 4: Resolve facility locations
         nlu = get_nlu_service()
         
-        # Load facility mapping (for demo, use a simple mapping)
-        # In production, this would be a comprehensive database
-        facility_mapping = {}  # Empty for now, would be loaded from config
+        # Load facility mapping from config
+        import json
+        facility_mapping = {}
+        try:
+            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "facility_mapping.json")
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config_data = json.load(f)
+                    facility_mapping = config_data.get("facility_mapping", {})
+                logger.info(f"Loaded {len(facility_mapping)} facilities from config")
+        except Exception as e:
+            logger.warning(f"Could not load facility mapping: {e}")
         
         # Extract full document text for context
         text_data = storage.download_json(f"text/{document_id}.json")
@@ -210,24 +390,60 @@ async def verify_claims(document_id: str) -> VerificationResponse:
         
         # Resolve locations
         resolved_facilities = {}
-        for facility_name in facility_names[:2]:  # Limit to 2 facilities for demo
+        for facility_name in facility_names[:3]:  # Limit to 3 facilities for demo
             location = nlu.resolve_facility_location(facility_name, facility_mapping)
             resolved_facilities[facility_name] = location.dict()
+        
+        # If no facilities found, create a default one with company name
+        if not resolved_facilities:
+            # Create a fallback facility with demo coordinates
+            fallback_location = {
+                "facility_name": company_name,
+                "resolved": True,
+                "latitude": 37.7749,  # San Francisco (demo)
+                "longitude": -122.4194,
+                "address": "Headquarters Location (Demo Data)",
+                "confidence": 0.5,
+                "source": "fallback"
+            }
+            resolved_facilities[company_name] = fallback_location
+            logger.info(f"Created fallback facility for {company_name}")
+        
+        # Update claims with facility information
+        # This ensures the frontend receives facility data
+        primary_facility = list(resolved_facilities.keys())[0] if resolved_facilities else company_name
+        for claim in claims:
+            if "facility_name" not in claim or not claim.get("facility_name"):
+                claim["facility_name"] = primary_facility
+            if "location" not in claim or not claim.get("location"):
+                # Add location info if facility was resolved
+                if primary_facility in resolved_facilities:
+                    facility_loc = resolved_facilities[primary_facility]
+                    if facility_loc.get("resolved"):
+                        claim["location"] = facility_loc.get("address", "Location available")
+                        claim["latitude"] = facility_loc.get("latitude")
+                        claim["longitude"] = facility_loc.get("longitude")
+        
+        # Save updated claims with facility information
+        storage.upload_json(
+            session_id,
+            {"claims": claims},
+            f"claims/{document_id}.json"
+        )
         
         # Stage 5: Collect external evidence
         external_data = get_external_data_service()
         all_evidence = []
         
         for claim in claims[:5]:  # Limit to 5 claims for demo
-            # Add company name and facility info to claim
+            # Add company name to claim
             claim["company_name"] = company_name
-            if facility_names:
-                claim["facility_name"] = facility_names[0]
             
             # Get facility location if available
             facility_location = None
-            if facility_names and facility_names[0] in resolved_facilities:
-                facility_location = resolved_facilities[facility_names[0]]
+            facility_name = claim.get("facility_name", primary_facility)
+            if facility_name in resolved_facilities:
+                facility_location = resolved_facilities[facility_name]
             
             # Collect evidence
             evidence_list = await external_data.collect_evidence_for_claim(
@@ -236,9 +452,10 @@ async def verify_claims(document_id: str) -> VerificationResponse:
             )
             all_evidence.extend(evidence_list)
         
-        # Store evidence
+        # Store evidence and facilities
         evidence_data = [ev.dict() for ev in all_evidence]
         storage.upload_json(
+            session_id,
             {
                 "evidence": evidence_data,
                 "facilities": resolved_facilities
@@ -246,7 +463,7 @@ async def verify_claims(document_id: str) -> VerificationResponse:
             f"evidence/{document_id}.json"
         )
         
-        logger.info(f"Collected {len(all_evidence)} evidence records")
+        logger.info(f"Collected {len(all_evidence)} evidence records for {len(facility_names)} facilities")
         
         return VerificationResponse(
             document_id=document_id,
@@ -261,18 +478,33 @@ async def verify_claims(document_id: str) -> VerificationResponse:
 
 
 @router.post("/score", response_model=ScoringResponse)
-async def score_claims(document_id: str) -> ScoringResponse:
+async def score_claims(
+    document_id: str,
+    session_id: Optional[str] = Header(None, alias="X-Session-ID")
+) -> ScoringResponse:
     """
     Stages 6 & 7: Calculate risk score and generate explanation
     
     Args:
         document_id: Document identifier
+        session_id: Session ID (from X-Session-ID header)
         
     Returns:
         ScoringResponse with risk score and explanation
     """
     try:
         storage = get_storage_service()
+        
+        # Get session from metadata if not provided
+        if not session_id:
+            metadata = storage.download_json(f"metadata/{document_id}.json")
+            session_id = metadata.get("session_id")
+            if not session_id:
+                raise HTTPException(status_code=401, detail="Session ID required")
+        
+        # Validate session
+        if not storage.get_session_info(session_id):
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
         
         # Load claims and evidence
         claims_data = storage.download_json(f"claims/{document_id}.json")
@@ -294,6 +526,7 @@ async def score_claims(document_id: str) -> ScoringResponse:
         
         # Store final report
         storage.upload_json(
+            session_id,
             risk_score.dict(),
             f"reports/{document_id}.json"
         )
@@ -308,6 +541,78 @@ async def score_claims(document_id: str) -> ScoringResponse:
         
     except Exception as e:
         logger.error(f"Error scoring claims: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/map-data/{document_id}")
+async def get_map_data(
+    document_id: str,
+    session_id: Optional[str] = Header(None, alias="X-Session-ID")
+):
+    """
+    Get facility location data for map visualization
+    
+    Args:
+        document_id: Document identifier
+        session_id: Session ID (from X-Session-ID header)
+        
+    Returns:
+        Facility locations and claims with coordinates
+    """
+    try:
+        storage = get_storage_service()
+        
+        # Get session from metadata if not provided
+        if not session_id:
+            metadata = storage.download_json(f"metadata/{document_id}.json")
+            session_id = metadata.get("session_id")
+            if not session_id:
+                raise HTTPException(status_code=401, detail="Session ID required")
+        
+        # Validate session
+        if not storage.get_session_info(session_id):
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        # Load claims with location data
+        claims_data = storage.download_json(f"claims/{document_id}.json")
+        claims = claims_data.get("claims", [])
+        
+        # Load facilities if available
+        facilities = {}
+        try:
+            evidence_data = storage.download_json(f"evidence/{document_id}.json")
+            facilities = evidence_data.get("facilities", {})
+        except:
+            pass
+        
+        # Extract unique locations from claims
+        locations = []
+        seen_coords = set()
+        
+        for claim in claims:
+            lat = claim.get("latitude")
+            lon = claim.get("longitude")
+            if lat and lon:
+                coord_key = f"{lat},{lon}"
+                if coord_key not in seen_coords:
+                    seen_coords.add(coord_key)
+                    locations.append({
+                        "facility_name": claim.get("facility_name", "Unknown"),
+                        "latitude": lat,
+                        "longitude": lon,
+                        "address": claim.get("location", ""),
+                        "claim_count": sum(1 for c in claims if c.get("latitude") == lat and c.get("longitude") == lon)
+                    })
+        
+        return {
+            "document_id": document_id,
+            "locations": locations,
+            "facilities": facilities,
+            "total_locations": len(locations)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting map data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

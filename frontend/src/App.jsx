@@ -2,7 +2,7 @@ import { useState } from 'react'
 import UploadModal from './components/UploadModal'
 import ClaimsTable from './components/ClaimsTable'
 import EvidencePanel from './components/EvidencePanel'
-import { uploadDocument, extractClaims, verifyClaims, scoreClaims } from './services/api'
+import { uploadDocument, extractClaims, verifyClaims, scoreClaims, getMapData } from './services/api'
 
 function App() {
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -11,6 +11,7 @@ function App() {
   const [claims, setClaims] = useState([])
   const [selectedClaim, setSelectedClaim] = useState(null)
   const [evidence, setEvidence] = useState([])
+  const [mapData, setMapData] = useState(null)
   const [riskScore, setRiskScore] = useState(null)
   const [loading, setLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState('')
@@ -26,34 +27,68 @@ function App() {
       setLoadingMessage('Uploading document...')
       const uploadResponse = await uploadDocument(file, company)
       setDocumentId(uploadResponse.document_id)
+      console.log('Upload complete:', uploadResponse.document_id)
       
       // Stage 2 & 3: Extract claims
       setLoadingMessage('Extracting ESG claims with IBM Granite AI...')
       const claimsResponse = await extractClaims(uploadResponse.document_id)
       setClaims(claimsResponse.claims)
+      console.log('Claims extracted:', claimsResponse.claims.length)
       
       // Stage 4 & 5: Verify claims
       setLoadingMessage('Verifying claims with satellite and news data...')
       const verifyResponse = await verifyClaims(uploadResponse.document_id)
       setEvidence(verifyResponse.evidence)
+      console.log('Evidence collected:', verifyResponse.evidence.length)
+      
+      // Fetch map data
+      setLoadingMessage('Loading facility locations...')
+      try {
+        const mapResponse = await getMapData(uploadResponse.document_id)
+        setMapData(mapResponse)
+        console.log('✅ Map data loaded successfully:', {
+          total_locations: mapResponse.total_locations,
+          locations: mapResponse.locations,
+          facilities: Object.keys(mapResponse.facilities || {}).length
+        })
+      } catch (mapError) {
+        console.error('❌ Failed to load map data:', mapError)
+        setMapData(null)
+        // Continue without map data - not critical for the flow
+      }
       
       // Stage 6 & 7: Score and explain
       setLoadingMessage('Calculating risk score and generating explanation...')
       const scoreResponse = await scoreClaims(uploadResponse.document_id)
-      setRiskScore(scoreResponse.risk_score)
+      console.log('Score response:', scoreResponse)
       
+      // Ensure we have the risk_score object
+      if (scoreResponse && scoreResponse.risk_score) {
+        setRiskScore(scoreResponse.risk_score)
+        console.log('Risk score set:', scoreResponse.risk_score.truth_score)
+      } else {
+        console.error('Invalid score response:', scoreResponse)
+        throw new Error('Invalid scoring response received')
+      }
+      
+      // Clear loading state
       setLoading(false)
       setLoadingMessage('')
+      console.log('Processing complete!')
       
       // Auto-select first claim
       if (claimsResponse.claims.length > 0) {
         setSelectedClaim(claimsResponse.claims[0])
       }
     } catch (err) {
+      console.error('Error in handleUpload:', err)
       setError(err.message || 'An error occurred during processing')
       setLoading(false)
       setLoadingMessage('')
-      console.error('Error:', err)
+    } finally {
+      // Ensure loading is always cleared
+      setLoading(false)
+      setLoadingMessage('')
     }
   }
 
@@ -197,6 +232,7 @@ function App() {
           <EvidencePanel
             claim={selectedClaim}
             evidence={evidence}
+            mapData={mapData}
             riskScore={riskScore}
           />
         </div>

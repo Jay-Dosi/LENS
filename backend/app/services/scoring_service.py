@@ -3,7 +3,7 @@ Risk Scoring Service - Stage 6
 Calculates transparent, explainable risk scores for ESG claims
 """
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from app.models.schemas import RiskScore, Evidence
 

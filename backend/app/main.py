@@ -2,6 +2,7 @@
 ESG Claim Verification Assistant - Main FastAPI Application
 """
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
@@ -15,13 +16,27 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan events"""
+    # Startup
+    logger.info("Starting ESG Claim Verification Assistant")
+    logger.info(f"Upload directory: {settings.upload_dir}")
+    logger.info(f"Max file size: {settings.max_file_size_mb}MB")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down ESG Claim Verification Assistant")
+
 # Create FastAPI app
 app = FastAPI(
     title="ESG Claim Verification Assistant",
     description="AI-powered greenwashing risk detection for corporate sustainability reports",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # Configure CORS
@@ -35,18 +50,6 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router, prefix="/api/v1", tags=["ESG Verification"])
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    logger.info("Starting ESG Claim Verification Assistant")
-    logger.info(f"Upload directory: {settings.upload_dir}")
-    logger.info(f"Max file size: {settings.max_file_size_mb}MB")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("Shutting down ESG Claim Verification Assistant")
 
 @app.get("/")
 async def root():

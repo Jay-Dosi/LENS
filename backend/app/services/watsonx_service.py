@@ -5,7 +5,7 @@ Handles claim extraction and explanation generation using Granite models
 import json
 import logging
 from typing import List, Dict, Any, Optional
-from ibm_watsonx_ai import APIClient, Credentials
+from ibm_watsonx_ai import APIClient
 from ibm_watsonx_ai.foundation_models import ModelInference
 from app.config import settings
 from app.models.schemas import Claim
@@ -63,12 +63,12 @@ Write exactly 3 bullet points:"""
 
     def __init__(self):
         """Initialize watsonx.ai client"""
-        self.credentials = Credentials(
-            url=settings.watsonx_url,
-            api_key=settings.ibm_cloud_api_key
-        )
+        credentials = {
+            "url": settings.watsonx_url,
+            "apikey": settings.ibm_cloud_api_key
+        }
         
-        self.client = APIClient(self.credentials)
+        self.client = APIClient(credentials)
         self.project_id = settings.ibm_watsonx_project_id
         
         # Initialize model instances

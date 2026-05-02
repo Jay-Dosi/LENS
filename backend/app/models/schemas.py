@@ -3,7 +3,7 @@ Data models for ESG Claim Verification Assistant
 """
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 class Document(BaseModel):
@@ -27,7 +27,7 @@ class Claim(BaseModel):
     value: Optional[float] = None
     unit: Optional[str] = None
     year: Optional[int] = None
-    target_or_achieved: str = Field(
+    target_or_achieved: Optional[str] = Field(
         default="unknown",
         description="Whether claim is 'target', 'achieved', or 'unknown'"
     )
@@ -35,6 +35,11 @@ class Claim(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, description="Model confidence score")
     facility_name: Optional[str] = None
     location: Optional[str] = None
+    
+    @validator('target_or_achieved', pre=True, always=True)
+    def set_target_or_achieved_default(cls, v):
+        """Convert None to 'unknown' for target_or_achieved field"""
+        return v or "unknown"
 
 
 class FacilityLocation(BaseModel):

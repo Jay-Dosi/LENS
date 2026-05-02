@@ -6,12 +6,52 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
+// Store session ID in memory
+let sessionId = null;
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 120000, // 120 second timeout to prevent infinite waiting
 });
+
+// Add request interceptor to include session ID
+api.interceptors.request.use((config) => {
+  if (sessionId) {
+    config.headers['X-Session-ID'] = sessionId;
+  }
+  return config;
+});
+
+// Add response interceptor to capture session ID from upload and handle errors
+api.interceptors.response.use(
+  (response) => {
+    // Capture session ID from upload response if present
+    if (response.config.url === '/upload' && response.data.message) {
+      const match = response.data.message.match(/session: ([a-f0-9-]+)/);
+      if (match) {
+        sessionId = match[1];
+        console.log('Session ID captured:', sessionId);
+      }
+    }
+    return response;
+  },
+  (error) => {
+    // Enhanced error handling
+    console.error('API Error:', error);
+    
+    // If session expired, clear it
+    if (error.response?.status === 401) {
+      sessionId = null;
+    }
+    
+    // Return a more informative error
+    const errorMessage = error.response?.data?.detail || error.message || 'An error occurred';
+    return Promise.reject(new Error(errorMessage));
+  }
+);
 
 /**
  * Upload a PDF document
@@ -69,6 +109,16 @@ export const scoreClaims = async (documentId) => {
     params: { document_id: documentId },
   });
 
+  return response.data;
+};
+
+/**
+ * Get map data for facility locations
+ * @param {string} documentId - Document identifier
+ * @returns {Promise} Map data with facility locations
+ */
+export const getMapData = async (documentId) => {
+  const response = await api.get(`/map-data/${documentId}`);
   return response.data;
 };
 
