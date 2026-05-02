@@ -190,7 +190,7 @@ class ScoringService:
             True if negative news risk detected
         """
         for ev in evidence:
-            if ev.get("source") == "GDELT":
+            if ev.get("source") in ["GDELT", "GOOGLE_NEWS"]:
                 if ev.get("signal_type") == "negative_news":
                     signal_strength = ev.get("signal_strength", 0)
                     if signal_strength > 0.25:  # Significant negative coverage

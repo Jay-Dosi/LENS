@@ -57,17 +57,29 @@ api.interceptors.response.use(
  * Upload a PDF document
  * @param {File} file - PDF file to upload
  * @param {string} companyName - Name of the company
+ * @param {number} latitude - Optional latitude
+ * @param {number} longitude - Optional longitude
+ * @param {string} locationName - Optional location name
  * @returns {Promise} Upload response with document_id
  */
-export const uploadDocument = async (file, companyName) => {
+export const uploadDocument = async (file, companyName, latitude = null, longitude = null, locationName = null) => {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('company_name', companyName);
+  
+  const params = { company_name: companyName };
+  if (latitude !== null && longitude !== null) {
+    params.latitude = latitude;
+    params.longitude = longitude;
+  }
+  if (locationName) {
+    params.location_name = locationName;
+  }
 
   const response = await api.post('/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
+    params: params
   });
 
   return response.data;

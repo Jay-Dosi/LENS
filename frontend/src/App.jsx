@@ -17,7 +17,7 @@ function App() {
   const [loadingMessage, setLoadingMessage] = useState('')
   const [error, setError] = useState(null)
 
-  const handleUpload = async (file, company) => {
+  const handleUpload = async (file, company, latitude = null, longitude = null, locationName = null) => {
     try {
       setLoading(true)
       setError(null)
@@ -25,7 +25,7 @@ function App() {
       
       // Stage 1: Upload
       setLoadingMessage('Uploading document...')
-      const uploadResponse = await uploadDocument(file, company)
+      const uploadResponse = await uploadDocument(file, company, latitude, longitude, locationName)
       setDocumentId(uploadResponse.document_id)
       console.log('Upload complete:', uploadResponse.document_id)
       
@@ -39,6 +39,15 @@ function App() {
       setLoadingMessage('Verifying claims with satellite and news data...')
       const verifyResponse = await verifyClaims(uploadResponse.document_id)
       setEvidence(verifyResponse.evidence)
+      if (verifyResponse.claims) {
+        setClaims(verifyResponse.claims);
+        // Also update selected claim if it was already selected
+        setSelectedClaim(prev => {
+          if (!prev) return prev;
+          const updated = verifyResponse.claims.find(c => c.claim_id === prev.claim_id);
+          return updated || prev;
+        });
+      }
       console.log('Evidence collected:', verifyResponse.evidence.length)
       
       // Fetch map data

@@ -4,6 +4,7 @@ Handles claim extraction and explanation generation using Granite models
 """
 import json
 import logging
+import uuid
 from typing import List, Dict, Any, Optional
 from ibm_watsonx_ai import APIClient
 from ibm_watsonx_ai.foundation_models import ModelInference
@@ -45,13 +46,18 @@ TEXT TO ANALYZE:
 JSON OUTPUT:"""
 
     # Explanation prompt template for Granite 3.0 8B Instruct
-    EXPLANATION_PROMPT = """You are an ESG verification analyst. Based on the claims and evidence below, write a concise 3-bullet summary.
+    EXPLANATION_PROMPT = """You are an ESG verification analyst. Based on the claims and evidence below, write a concise 4-bullet summary.
 
-For each bullet:
-- Cite the specific claim and the specific external signal
+You must deeply analyze all provided evidence. Do NOT just look at keywords. Read the full text and descriptions of the news articles, and carefully evaluate the map and air quality (AQI) reports.
+
+For the first 3 bullets:
+- Cite the specific claim and the specific external signal (e.g., news article details, map/location data, AQI levels)
 - Do NOT accuse the company of fraud
 - Use neutral, factual language
 - Focus on what was verified, what was not verified, and what appears inconsistent
+
+For the 4th bullet:
+- Provide a "Final Verdict" that states clearly what is true and what is not based on the news articles and map results.
 
 CLAIMS:
 {claims}
@@ -59,7 +65,7 @@ CLAIMS:
 EVIDENCE:
 {evidence}
 
-Write exactly 3 bullet points:"""
+Write exactly 4 bullet points:"""
 
     def __init__(self):
         """Initialize watsonx.ai client"""
@@ -130,7 +136,7 @@ Write exactly 3 bullet points:"""
             for idx, claim_dict in enumerate(claims_data):
                 try:
                     claim = Claim(
-                        claim_id=f"{document_id}_claim_{len(claims)}",
+                        claim_id=f"{document_id}_claim_{str(uuid.uuid4())[:8]}",
                         document_id=document_id,
                         claim_text=claim_dict.get("claim_text", ""),
                         claim_type=claim_dict.get("claim_type", "unknown"),

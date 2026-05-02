@@ -100,6 +100,7 @@ class VerificationResponse(BaseModel):
     evidence: List[Evidence]
     total_evidence: int
     status: str
+    claims: Optional[List[dict]] = None
 
 
 class ScoringResponse(BaseModel):

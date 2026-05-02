@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import httpx
 import feedparser
 from app.models.schemas import Evidence
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ class ExternalDataService:
         self,
         latitude: float,
         longitude: float,
-        days_back: int = 90
+        days_back: int = 1095
     ) -> Dict[str, Any]:
         """
         Query OpenWeatherMap Air Pollution API for air quality data near a location
@@ -52,8 +53,8 @@ class ExternalDataService:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days_back)
             
-            # Get OpenWeatherMap API key from environment
-            owm_api_key = os.getenv("OPENWEATHERMAP_API_KEY")
+            # Get OpenWeatherMap API key from settings
+            owm_api_key = settings.openweathermap_api_key
             
             if owm_api_key and owm_api_key != "your_openweathermap_api_key_here":
                 # Real OpenWeatherMap API call with retry logic
@@ -508,7 +509,7 @@ class ExternalDataService:
                     claim_id=claim_id,
                     source="OPENWEATHERMAP",
                     signal_type="poor_air_quality",
-                    signal_text=f"Current air quality: {aqi_label} (AQI: {current_aqi}/5). {high_pollution_days} high pollution days in past 90 days",
+                    signal_text=f"Current air quality: {aqi_label} (AQI: {current_aqi}/5). {high_pollution_days} high pollution days in past 1095 days",
                     signal_strength=min((current_aqi - 1) / 4.0, 1.0),  # Normalize to 0-1
                     timestamp=datetime.now(),
                     metadata=owm_data
@@ -520,7 +521,7 @@ class ExternalDataService:
                     claim_id=claim_id,
                     source="OPENWEATHERMAP",
                     signal_type="moderate_air_quality",
-                    signal_text=f"Current air quality: {aqi_label} (AQI: {current_aqi}/5). {high_pollution_days} high pollution days in past 90 days",
+                    signal_text=f"Current air quality: {aqi_label} (AQI: {current_aqi}/5). {high_pollution_days} high pollution days in past 1095 days",
                     signal_strength=0.5,
                     timestamp=datetime.now(),
                     metadata=owm_data

@@ -163,6 +163,9 @@ async def reset_all_data():
 async def upload_document(
     file: UploadFile = File(...),
     company_name: str = "Unknown Company",
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    location_name: Optional[str] = None,
     session_id: Optional[str] = Header(None, alias="X-Session-ID")
 ) -> UploadResponse:
     """
@@ -224,7 +227,10 @@ async def upload_document(
             "uploaded_at": datetime.now().isoformat(),
             "file_url": file_url,
             "status": "uploaded",
-            "session_id": session_id
+            "session_id": session_id,
+            "latitude": latitude,
+            "longitude": longitude,
+            "location_name": location_name
         }
         
         storage.upload_json(
@@ -381,48 +387,83 @@ async def verify_claims(
         except Exception as e:
             logger.warning(f"Could not load facility mapping: {e}")
         
-        # Extract full document text for context
-        text_data = storage.download_json(f"text/{document_id}.json")
-        full_text = " ".join([page["text"] for page in text_data.get("pages", [])])
+        # Check if manual coordinates were provided in metadata
+        manual_lat = metadata.get("latitude")
+        manual_lon = metadata.get("longitude")
+        manual_loc_name = metadata.get("location_name", "Manually Pinned Location")
         
-        # Identify facilities
-        facility_names = nlu.identify_facilities_in_claims(claims, full_text[:5000])
-        
-        # Resolve locations
         resolved_facilities = {}
-        for facility_name in facility_names[:3]:  # Limit to 3 facilities for demo
-            location = nlu.resolve_facility_location(facility_name, facility_mapping)
-            resolved_facilities[facility_name] = location.dict()
+        has_resolved = False
         
-        # If no facilities found, create a default one with company name
-        if not resolved_facilities:
-            # Create a fallback facility with demo coordinates
+        # Determine the primary facility name
+        facility_names = list(set([c.get("facility_name") for c in claims if c.get("facility_name")]))
+        if not facility_names:
+            facility_names = [company_name]
+        
+        if manual_lat is not None and manual_lon is not None:
+            logger.info(f"Using manually pinned location: ({manual_lat}, {manual_lon}) - {manual_loc_name}")
             fallback_location = {
                 "facility_name": company_name,
                 "resolved": True,
-                "latitude": 37.7749,  # San Francisco (demo)
-                "longitude": -122.4194,
-                "address": "Headquarters Location (Demo Data)",
-                "confidence": 0.5,
-                "source": "fallback"
+                "latitude": float(manual_lat),
+                "longitude": float(manual_lon),
+                "address": manual_loc_name,
+                "confidence": 1.0,
+                "source": "manual_pin"
             }
-            resolved_facilities[company_name] = fallback_location
-            logger.info(f"Created fallback facility for {company_name}")
+            resolved_facilities = {company_name: fallback_location}
+            has_resolved = True
+        else:
+            # Extract full document text for context
+            text_data = storage.download_json(f"text/{document_id}.json")
+            full_text = " ".join([page["text"] for page in text_data.get("pages", [])])
+            
+            # Identify facilities if needed (optional since we extracted from claims above)
+            nlu_facilities = nlu.identify_facilities_in_claims(claims, full_text[:5000])
+            if nlu_facilities:
+                facility_names = nlu_facilities
+            
+            # Resolve locations
+            for facility_name in facility_names[:3]:  # Limit to 3 facilities for demo
+                location = nlu.resolve_facility_location(facility_name, facility_mapping)
+                loc_dict = location.dict()
+                resolved_facilities[facility_name] = loc_dict
+                if loc_dict.get("resolved"):
+                    has_resolved = True
+            
+            # If no facilities were successfully resolved, create a default one with company name
+            if not has_resolved:
+                # Create a fallback facility with demo coordinates
+                fallback_location = {
+                    "facility_name": company_name,
+                    "resolved": True,
+                    "latitude": 37.7749,  # San Francisco (demo)
+                    "longitude": -122.4194,
+                    "address": "Headquarters Location (Demo Data)",
+                    "confidence": 0.5,
+                    "source": "fallback"
+                }
+                # Clear unresolved facilities to force the use of the fallback
+                resolved_facilities = {company_name: fallback_location}
+                logger.info(f"Created fallback facility for {company_name}")
         
         # Update claims with facility information
         # This ensures the frontend receives facility data
         primary_facility = list(resolved_facilities.keys())[0] if resolved_facilities else company_name
+        
         for claim in claims:
-            if "facility_name" not in claim or not claim.get("facility_name"):
+            facility_name = claim.get("facility_name")
+            
+            # If claim has no facility, or its facility is not in our resolved list
+            if not facility_name or facility_name not in resolved_facilities or not resolved_facilities[facility_name].get("resolved"):
                 claim["facility_name"] = primary_facility
-            if "location" not in claim or not claim.get("location"):
-                # Add location info if facility was resolved
-                if primary_facility in resolved_facilities:
-                    facility_loc = resolved_facilities[primary_facility]
-                    if facility_loc.get("resolved"):
-                        claim["location"] = facility_loc.get("address", "Location available")
-                        claim["latitude"] = facility_loc.get("latitude")
-                        claim["longitude"] = facility_loc.get("longitude")
+                
+            # Add location info
+            fac_name = claim["facility_name"]
+            if fac_name in resolved_facilities and resolved_facilities[fac_name].get("resolved"):
+                claim["location"] = resolved_facilities[fac_name].get("address", "Location available")
+                claim["latitude"] = resolved_facilities[fac_name].get("latitude")
+                claim["longitude"] = resolved_facilities[fac_name].get("longitude")
         
         # Save updated claims with facility information
         storage.upload_json(
@@ -469,7 +510,8 @@ async def verify_claims(
             document_id=document_id,
             evidence=all_evidence,
             total_evidence=len(all_evidence),
-            status="verification_complete"
+            status="verification_complete",
+            claims=claims
         )
         
     except Exception as e:

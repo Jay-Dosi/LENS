@@ -1,6 +1,9 @@
 """
 ESG Claim Verification Assistant - Main FastAPI Application
 """
+import os
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI

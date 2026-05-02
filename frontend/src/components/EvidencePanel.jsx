@@ -1,4 +1,28 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for leaflet marker icons in React/Vite
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow,
+});
+
+// Component to update map view when location changes
+function MapViewUpdater({ center }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [center, map]);
+  return null;
+}
 
 export default function EvidencePanel({ claim, evidence, mapData, riskScore }) {
   // Memoize filtered evidence to prevent recalculation on every render
@@ -10,17 +34,17 @@ export default function EvidencePanel({ claim, evidence, mapData, riskScore }) {
   // Find location data for the current claim from mapData
   const claimLocation = useMemo(() => {
     if (!claim || !mapData || !mapData.locations) return null;
-    
+
     // Try to match by facility name first
     const location = mapData.locations.find(loc =>
       loc.facility_name === claim.facility_name
     );
-    
+
     // If no match and only one location, use it
     if (!location && mapData.locations.length === 1) {
       return mapData.locations[0];
     }
-    
+
     return location;
   }, [claim, mapData]);
 
@@ -77,7 +101,7 @@ export default function EvidencePanel({ claim, evidence, mapData, riskScore }) {
         )}
       </div>
 
-      {/* Map Display */}
+      {/* Map Display
       <div className="bg-gray-700 rounded-lg p-4">
         <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,13 +133,27 @@ export default function EvidencePanel({ claim, evidence, mapData, riskScore }) {
               </div>
             )}
             
-            <div className="bg-gray-800 rounded h-32 flex items-center justify-center">
-              <div className="text-center">
-                <svg className="w-8 h-8 text-gray-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                <p className="text-xs text-gray-500">Interactive map available with Leaflet/Mapbox</p>
-              </div>
+            <div className="bg-gray-800 rounded h-48 flex items-center justify-center overflow-hidden relative z-0">
+              <MapContainer 
+                center={[claimLocation.latitude, claimLocation.longitude]} 
+                zoom={13} 
+                style={{ height: '100%', width: '100%', zIndex: 0 }}
+              >
+                <MapViewUpdater center={[claimLocation.latitude, claimLocation.longitude]} />
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                />
+                <Marker position={[claimLocation.latitude, claimLocation.longitude]}>
+                  <Popup>
+                    <div className="text-gray-900">
+                      <strong>{claimLocation.facility_name || claim.facility_name || 'Facility'}</strong>
+                      <br />
+                      {claimLocation.address || claim.location}
+                    </div>
+                  </Popup>
+                </Marker>
+              </MapContainer>
             </div>
           </div>
         ) : (
@@ -129,12 +167,12 @@ export default function EvidencePanel({ claim, evidence, mapData, riskScore }) {
             </p>
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* Evidence Cards */}
       <div className="space-y-2">
         <h3 className="font-semibold text-sm">External Evidence</h3>
-        
+
         {claimEvidence.length === 0 ? (
           <div className="bg-gray-700 p-4 rounded-lg text-center">
             <p className="text-sm text-gray-400">Loading evidence...</p>
