@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import ReactMarkdown from 'react-markdown';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -210,8 +211,18 @@ export default function EvidencePanel({ claim, evidence, mapData, riskScore }) {
             </svg>
             <h3 className="font-semibold text-sm">AI Analysis</h3>
           </div>
-          <div className="text-sm text-gray-200 whitespace-pre-line">
-            {riskScore.reasoning}
+          <div className="text-sm text-gray-200">
+            <ReactMarkdown
+              components={{
+                ul: ({node, ...props}) => <ul className="list-disc pl-5 my-2 space-y-1" {...props} />,
+                ol: ({node, ...props}) => <ol className="list-decimal pl-5 my-2 space-y-1" {...props} />,
+                li: ({node, ...props}) => <li className="text-gray-200" {...props} />,
+                strong: ({node, ...props}) => <strong className="font-bold text-white" {...props} />,
+                p: ({node, ...props}) => <p className="mb-3 leading-relaxed" {...props} />
+              }}
+            >
+              {riskScore.reasoning}
+            </ReactMarkdown>
           </div>
         </div>
       )}
