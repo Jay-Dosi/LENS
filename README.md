@@ -451,13 +451,6 @@ Show a **visible contradiction** between:
 
 ---
 
-## 📚 Additional Resources
-
-### Documentation
-- [`HACKATHON_DEPLOYMENT_GUIDE.md`](HACKATHON_DEPLOYMENT_GUIDE.md) - IBM Code Engine deployment for hackathon
-- [`WORKFLOW_AND_IMPLEMENTATION.md`](WORKFLOW_AND_IMPLEMENTATION.md) - Detailed system architecture and workflow
-- [`API_KEYS_GUIDE.md`](API_KEYS_GUIDE.md) - Complete API setup instructions
-
 ### External Services
 - [IBM watsonx.ai Documentation](https://www.ibm.com/docs/en/watsonx-as-a-service)
 - [IBM Watson NLU Documentation](https://cloud.ibm.com/docs/natural-language-understanding)
@@ -475,7 +468,7 @@ This project is created for the IBM Dev Day Hackathon.
 
 ## 👥 Team
 
-Built with ❤️ for IBM Dev Day Hackathon
+Built with IBM Bob for IBM Dev Day Hackathon
 
 ---
 
@@ -512,8 +505,3 @@ Built with ❤️ for IBM Dev Day Hackathon
 ---
 
 **Ready to detect greenwashing? Let's go! 🚀**
-
-For detailed setup instructions, see:
-- [`HACKATHON_DEPLOYMENT_GUIDE.md`](HACKATHON_DEPLOYMENT_GUIDE.md) - IBM Code Engine deployment
-- [`API_KEYS_GUIDE.md`](API_KEYS_GUIDE.md) - API configuration
-- [`WORKFLOW_AND_IMPLEMENTATION.md`](WORKFLOW_AND_IMPLEMENTATION.md) - System architecture
