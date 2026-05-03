@@ -13,11 +13,11 @@ The ESG Claim Verification Assistant ingests corporate sustainability reports (P
 **Key Features:**
 - 📄 PDF text extraction with intelligent chunking
 - 🤖 AI-powered claim extraction using IBM Granite models (watsonx.ai)
-- 🔍 Production-grade entity extraction using IBM Watson NLU
-- 🛰️ Satellite thermal anomaly detection via NASA FIRMS
-- 📰 News sentiment analysis via GDELT
+- 🔍 Entity extraction for preliminary facility identification using IBM Watson NLU
+- 🗺️ Interactive facility mapping with precision manual location pinning
+- ☁️ Historical air quality analysis via OpenWeatherMap
+- 📰 News sentiment analysis via Google News RSS
 - 📊 Transparent risk scoring with explainable results
-- 🗺️ Interactive facility mapping and evidence visualization
 - 💾 Flexible storage: Local filesystem, AWS S3, Azure Blob, or MinIO
 
 ---
@@ -43,7 +43,7 @@ The ESG Claim Verification Assistant ingests corporate sustainability reports (P
 - react-leaflet - Interactive maps
 
 **Deployment**
-- Docker - Containerization
+- Native local or cloud deployment
 - Multiple deployment options: AWS, Azure, GCP, Heroku, Railway, or self-hosted
 
 ---
@@ -63,7 +63,9 @@ The ESG Claim Verification Assistant ingests corporate sustainability reports (P
    - Create a Watson NLU service in IBM Cloud
    - Get your API Key and Service URL
    - Free tier: 30,000 NLU items/month
-   - See [Watson NLU Setup Guide](docs/WATSON_NLU_SETUP.md) for detailed instructions
+
+4. **OpenWeatherMap API**
+   - Create an account to get a free API key for historical air quality data
 
 ### Optional Services (Choose One for Production)
 
@@ -77,7 +79,6 @@ The ESG Claim Verification Assistant ingests corporate sustainability reports (P
 
 - Python 3.11+
 - Node.js 18+ (for frontend)
-- Docker (optional, for containerized deployment)
 
 ---
 
@@ -107,9 +108,6 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Download spaCy model for NER
-python -m spacy download en_core_web_sm
-
 # Copy environment template
 copy .env.example .env  # Windows
 cp .env.example .env    # macOS/Linux
@@ -120,19 +118,26 @@ cp .env.example .env    # macOS/Linux
 **Required Environment Variables:**
 
 ```env
-# IBM watsonx.ai (REQUIRED - Only IBM service needed)
+# IBM watsonx.ai
 IBM_CLOUD_API_KEY=your_ibm_cloud_api_key_here
 IBM_WATSONX_PROJECT_ID=your_watsonx_project_id_here
 WATSONX_URL=https://us-south.ml.cloud.ibm.com
 WATSONX_EXTRACTION_MODEL=ibm/granite-13b-instruct-v2
 WATSONX_EXPLANATION_MODEL=ibm/granite-3-8b-instruct
 
+# IBM Watson NLU
+WATSON_NLU_API_KEY=your_watson_nlu_api_key_here
+WATSON_NLU_URL=https://api.us-south.natural-language-understanding.watson.cloud.ibm.com
+
+# OpenWeatherMap API Key
+OPENWEATHERMAP_API_KEY=your_openweathermap_api_key_here
+
 # Storage Backend (local for development, s3 for production)
 STORAGE_BACKEND=local
 STORAGE_LOCAL_PATH=./storage
 
-# NLU Configuration (spaCy - open source)
-SPACY_MODEL=en_core_web_sm
+# OpenWeatherMap API Key
+OPENWEATHERMAP_API_KEY=your_openweathermap_key_here
 
 # Optional: For production with S3
 # STORAGE_BACKEND=s3
@@ -354,48 +359,18 @@ Show a **visible contradiction** between:
 
 ---
 
-## 🐳 Docker Deployment
 
-### Build and Run
-
-```bash
-# Build backend image
-cd backend
-docker build -t esg-lens-backend .
-
-# Run container
-docker run -p 8000:8000 --env-file .env esg-lens-backend
-```
-
-### Deploy to IBM Cloud Code Engine
-
-```bash
-# Login to IBM Cloud
-ibmcloud login
-
-# Target Code Engine
-ibmcloud ce project select --name esg-lens-project
-
-# Build and deploy
-ibmcloud ce application create \
-  --name esg-lens-api \
-  --image esg-lens-backend \
-  --port 8000 \
-  --env-from-configmap esg-lens-config \
-  --min-scale 0 \
-  --max-scale 1
-```
 
 ---
 
 ## 📊 System Workflow
 
 ```
-1. Document Ingest → Upload PDF to local/S3 storage
+1. Document Ingest → Upload PDF to local/S3 storage with Manual Map Pin coordinates
 2. Text Parsing → Extract and chunk text locally (PyMuPDF)
 3. Claim Extraction → watsonx.ai Granite 13B extracts claims
-4. Facility Resolution → spaCy NER identifies locations and entities
-5. Evidence Collection → Query NASA FIRMS + GDELT (free APIs)
+4. Entity Analysis → IBM Watson NLU identifies facility names from claims
+5. Evidence Collection → Query OpenWeatherMap + Google News using pinned coordinates
 6. Risk Scoring → Transparent heuristic calculation
 7. Explanation → watsonx.ai Granite 8B generates summary
 ```
