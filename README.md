@@ -93,7 +93,7 @@ The ESG Claim Verification Assistant ingests corporate sustainability reports (P
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Jay-Dosi/LENS
 cd LENS
 ```
 
