@@ -4,7 +4,12 @@
  */
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+let baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+if (baseUrl && !baseUrl.endsWith('/api/v1') && !baseUrl.includes('localhost')) {
+  // If provided URL is just the domain (like from Render), append the API path
+  baseUrl = `${baseUrl.replace(/\/$/, '')}/api/v1`;
+}
+const API_BASE_URL = baseUrl;
 
 // Store session ID in memory
 let sessionId = null;

@@ -18,21 +18,21 @@
 ## 🎯 Project Overview
 
 ### Purpose
-The ESG Claim Verification Assistant is an AI-powered greenwashing risk detection tool that verifies corporate sustainability claims against publicly available satellite and news data.
+The ESG Claim Verification Assistant is an AI-powered greenwashing risk detection tool that verifies corporate sustainability claims against publicly available air quality and news data.
 
 ### Problem Statement
-Companies make environmental claims in sustainability reports that are difficult to verify. Manual verification is time-consuming and requires expertise in multiple domains (satellite data, news analysis, ESG reporting).
+Companies make environmental claims in sustainability reports that are difficult to verify. Manual verification is time-consuming and requires expertise in multiple domains (environmental data, news analysis, ESG reporting).
 
 ### Solution
 An automated system that:
 - Extracts ESG claims from PDF reports using AI
-- Cross-references claims with satellite thermal anomaly data
+- Cross-references claims with local air quality data
 - Analyzes news sentiment for environmental issues
 - Produces transparent, explainable risk scores
 - Generates natural language explanations
 
 ### Key Innovation
-Combines multiple data sources (AI, satellite, news) to provide objective verification of corporate sustainability claims in under 60 seconds.
+Combines multiple data sources (AI, environmental sensors, news) to provide objective verification of corporate sustainability claims in under 60 seconds.
 
 ---
 
@@ -69,8 +69,8 @@ graph TB
     end
 
     subgraph "External Data"
-        FIRMS[NASA FIRMS Satellite]
-        GDELT[GDELT News Database]
+        OWM[OpenWeatherMap Air Quality]
+        NEWS[Google News RSS]
     end
 
     UI --> API
@@ -86,8 +86,8 @@ graph TB
     S1 --> COS
     S3 --> WX
     S4 --> NLU
-    S5 --> FIRMS
-    S5 --> GDELT
+    S5 --> OWM
+    S5 --> NEWS
     S7 --> WX
 ```
 
@@ -217,23 +217,23 @@ graph TB
 
 **Process:**
 
-#### NASA FIRMS Query
+#### OpenWeatherMap Query
 1. For each resolved facility location:
-   - Query NASA FIRMS API with lat/long + 50km radius
-   - Search past 90 days for thermal anomalies
-   - Count high-confidence detections
+   - Query OpenWeatherMap Air Pollution API with lat/long
+   - Search historical data for poor air quality days
+   - Evaluate current AQI level
    - Create evidence record with signal strength
 
 **Signal Types:**
-- `thermal_anomaly` - Detected fires/heat sources
-- `no_anomaly` - No thermal activity detected
+- `poor_air_quality` - High AQI levels detected
+- `good_air_quality` - Low AQI levels detected
 
-#### GDELT Query
+#### Google News Query
 1. For each claim:
    - Build search query with facility + company name
    - Add environmental keywords (emissions, pollution, violation)
-   - Query GDELT Doc API for past 90 days
-   - Analyze article tone (negative threshold: <-2)
+   - Query Google News RSS
+   - Analyze article tone using negative keywords
    - Count negative environmental coverage
 
 **Signal Types:**
@@ -242,9 +242,9 @@ graph TB
 
 **Technologies:**
 - httpx async HTTP client
-- NASA FIRMS VIIRS/MODIS satellite data
-- GDELT 2.0 Doc API
-- Tone analysis for sentiment
+- OpenWeatherMap Air Pollution API
+- Google News RSS feedparser
+- Keyword analysis for sentiment
 
 **Output:** Evidence records with source attribution and signal strength
 
@@ -262,7 +262,7 @@ Penalties (per claim):
   (External signals contradict claim)
   
 - Location Signal: -25 points
-  (Thermal anomalies or unresolved location)
+  (Poor air quality or unresolved location)
   
 - Negative News: -20 points
   (Significant negative coverage)
@@ -424,7 +424,7 @@ backend/
    ↓
 6. POST /api/v1/verify
    ↓
-7. Facilities resolved (NLU) → Evidence collected (FIRMS + GDELT)
+7. Facilities resolved (NLU) → Evidence collected (OpenWeatherMap + Google News)
    ↓
 8. POST /api/v1/score
    ↓
@@ -455,14 +455,26 @@ esg-lens-hackathon/
 
 ## 🔌 API Endpoints
 
+### POST /api/v1/session/create
+**Purpose:** Create a new stateless session
+**Response:** `{"session_id": "uuid", "timeout_minutes": 60}`
+
+---
+
 ### POST /api/v1/upload
 **Purpose:** Upload sustainability report PDF
+
+**Headers:**
+- `X-Session-ID`: Session identifier (optional)
 
 **Request:**
 ```
 Content-Type: multipart/form-data
 - file: PDF file
 - company_name: string
+- latitude: float (optional)
+- longitude: float (optional)
+- location_name: string (optional)
 ```
 
 **Response:**
@@ -480,6 +492,9 @@ Content-Type: multipart/form-data
 
 ### POST /api/v1/extract-claims
 **Purpose:** Extract ESG claims from document
+
+**Headers:**
+- `X-Session-ID`: Session identifier (required)
 
 **Request:**
 ```
@@ -513,6 +528,9 @@ Content-Type: multipart/form-data
 ### POST /api/v1/verify
 **Purpose:** Collect external evidence for claims
 
+**Headers:**
+- `X-Session-ID`: Session identifier (required)
+
 **Request:**
 ```
 ?document_id=uuid
@@ -524,11 +542,11 @@ Content-Type: multipart/form-data
   "document_id": "uuid",
   "evidence": [
     {
-      "evidence_id": "uuid_claim_0_firms",
+      "evidence_id": "uuid_claim_0_air_quality",
       "claim_id": "uuid_claim_0",
-      "source": "NASA_FIRMS",
-      "signal_type": "thermal_anomaly",
-      "signal_text": "Detected 3 thermal anomalies within 50km",
+      "source": "OPENWEATHERMAP",
+      "signal_type": "poor_air_quality",
+      "signal_text": "Current air quality: Poor (AQI: 4/5)",
       "signal_strength": 0.3,
       "timestamp": "2024-01-15T10:30:00Z"
     }
@@ -542,6 +560,9 @@ Content-Type: multipart/form-data
 
 ### POST /api/v1/score
 **Purpose:** Calculate risk score and generate explanation
+
+**Headers:**
+- `X-Session-ID`: Session identifier (required)
 
 **Request:**
 ```
@@ -564,12 +585,31 @@ Content-Type: multipart/form-data
         "evidence_count": 2
       }
     ],
-    "reasoning": "• Claim about 25% emissions reduction contradicted by thermal anomalies\n• Facility location verified\n• Moderate negative news coverage detected",
+    "reasoning": "• Claim about 25% emissions reduction contradicted by poor air quality\n• Facility location verified\n• Moderate negative news coverage detected",
     "generated_at": "2024-01-15T10:35:00Z"
   },
   "status": "scoring_complete"
 }
 ```
+
+---
+
+### GET /api/v1/map-data/{document_id}
+**Purpose:** Get facility location data for map visualization
+
+**Headers:**
+- `X-Session-ID`: Session identifier (required)
+
+---
+
+### GET /api/v1/health
+**Purpose:** Health check endpoint
+
+---
+
+### Admin Endpoints
+- `POST /api/v1/admin/cleanup-expired`: Clean up expired sessions
+- `POST /api/v1/admin/reset`: Reset all data (for testing)
 
 ---
 
@@ -627,14 +667,14 @@ Content-Type: multipart/form-data
 **File:** `backend/app/services/external_data_service.py`
 
 **Responsibilities:**
-- Query NASA FIRMS for thermal anomalies
-- Query GDELT for news coverage
+- Query OpenWeatherMap for air quality
+- Query Google News for news coverage
 - Collect evidence for claims
 - Analyze signal strength
 
 **Key Methods:**
-- `query_nasa_firms(lat, lon, radius_km, days_back)`
-- `query_gdelt(facility_name, company_name, days_back)`
+- `query_openweathermap(latitude, longitude, days_back)`
+- `query_google_news(facility_name, company_name, days_back)`
 - `collect_evidence_for_claim(claim, facility_location)`
 
 ---
@@ -721,7 +761,7 @@ Content-Type: multipart/form-data
 
 **Features:**
 - Show evidence for selected claim
-- Display source attribution (FIRMS/GDELT)
+- Display source attribution (OpenWeatherMap/Google News)
 - Signal strength indicators
 - AI-generated explanation
 - Risk score breakdown
@@ -738,7 +778,7 @@ Backend (localhost:8000)
     ↓ HTTPS
 IBM Cloud Services
     ↓ HTTPS
-External APIs (FIRMS, GDELT)
+External APIs (OpenWeatherMap, Google News)
 ```
 
 ### Production (IBM Cloud Code Engine)
@@ -751,7 +791,7 @@ IBM Code Engine (Backend API)
     ↓ HTTPS
 IBM Cloud Services (watsonx.ai, COS, NLU)
     ↓ HTTPS
-External APIs (FIRMS, GDELT)
+External APIs (OpenWeatherMap, Google News)
 ```
 
 ### Containerization

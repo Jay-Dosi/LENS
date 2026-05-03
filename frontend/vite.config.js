@@ -12,6 +12,16 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
+  },
+  // Production preview server (used by Code Engine / IBM Cloud deployment)
+  preview: {
+    port: parseInt(process.env.PORT) || 8080,
+    host: '0.0.0.0',
+    allowedHosts: 'all',
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
   }
 })
 

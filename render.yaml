@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: lens-backend
+    env: python
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: IBM_CLOUD_API_KEY
+        sync: false
+      - key: IBM_WATSONX_PROJECT_ID
+        sync: false
+      - key: WATSON_NLU_API_KEY
+        sync: false
+      - key: OPENWEATHERMAP_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: STORAGE_MODE
+        value: "memory"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+        
+  - type: web
+    name: lens-frontend
+    env: static
+    buildCommand: "cd frontend && npm install && npm run build"
+    staticPublishPath: "./frontend/dist"
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: lens-backend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NODE_VERSION
+        value: "20.11.0"

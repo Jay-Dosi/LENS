@@ -8,7 +8,7 @@ An AI-powered greenwashing risk detection tool that verifies corporate sustainab
 
 ## 🎯 Overview
 
-The ESG Claim Verification Assistant ingests corporate sustainability reports (PDFs), extracts carbon and emissions-related claims using IBM watsonx.ai, cross-references those claims against NASA FIRMS satellite data and GDELT news data, and produces an explainable, transparent risk score.
+The ESG Claim Verification Assistant ingests corporate sustainability reports (PDFs), extracts carbon and emissions-related claims using IBM watsonx.ai, cross-references those claims against OpenWeatherMap air quality data and Google News data, and produces an explainable, transparent risk score.
 
 **Key Features:**
 - 📄 PDF text extraction with intelligent chunking
@@ -186,12 +186,22 @@ npm run dev
 
 ## 📡 API Endpoints
 
+### POST /api/v1/session/create
+Create a new stateless session
+**Returns:** `{"session_id": "uuid", "timeout_minutes": 60}`
+
 ### POST /api/v1/upload
 Upload a sustainability report PDF
+
+**Headers:**
+- `X-Session-ID`: Session identifier (optional, creates new if omitted)
 
 **Request:**
 - `file`: PDF file (multipart/form-data)
 - `company_name`: Company name (form field)
+- `latitude`: Optional manual facility latitude (form field)
+- `longitude`: Optional manual facility longitude (form field)
+- `location_name`: Optional manual location name (form field)
 
 **Response:**
 ```json
@@ -207,11 +217,12 @@ Upload a sustainability report PDF
 ### POST /api/v1/extract-claims
 Extract ESG claims from uploaded document
 
+**Headers:**
+- `X-Session-ID`: Session identifier (required)
+
 **Request:**
-```json
-{
-  "document_id": "uuid"
-}
+```
+?document_id=uuid
 ```
 
 **Response:**
@@ -239,11 +250,12 @@ Extract ESG claims from uploaded document
 ### POST /api/v1/verify
 Collect external evidence for claims
 
+**Headers:**
+- `X-Session-ID`: Session identifier (required)
+
 **Request:**
-```json
-{
-  "document_id": "uuid"
-}
+```
+?document_id=uuid
 ```
 
 **Response:**
@@ -254,9 +266,9 @@ Collect external evidence for claims
     {
       "evidence_id": "uuid_claim_0_firms",
       "claim_id": "uuid_claim_0",
-      "source": "NASA_FIRMS",
-      "signal_type": "thermal_anomaly",
-      "signal_text": "Detected 3 thermal anomalies within 50km",
+      "source": "OPENWEATHERMAP",
+      "signal_type": "poor_air_quality",
+      "signal_text": "Current air quality: Poor (AQI: 4/5). 15 high pollution days in past 1095 days",
       "signal_strength": 0.3,
       "timestamp": "2024-01-15T10:30:00Z"
     }
@@ -269,11 +281,12 @@ Collect external evidence for claims
 ### POST /api/v1/score
 Calculate risk score and generate explanation
 
+**Headers:**
+- `X-Session-ID`: Session identifier (required)
+
 **Request:**
-```json
-{
-  "document_id": "uuid"
-}
+```
+?document_id=uuid
 ```
 
 **Response:**
@@ -284,12 +297,25 @@ Calculate risk score and generate explanation
     "truth_score": 65,
     "risk_band": "Medium Risk",
     "claim_breakdown": [...],
-    "reasoning": "• Claim about 25% emissions reduction contradicted by thermal anomalies\n• Facility location verified\n• Moderate negative news coverage detected",
+    "reasoning": "• Claim about 25% emissions reduction contradicted by poor air quality near facility\n• Facility location verified\n• Moderate negative news coverage detected",
     "generated_at": "2024-01-15T10:35:00Z"
   },
   "status": "scoring_complete"
 }
 ```
+
+### GET /api/v1/map-data/{document_id}
+Get facility location data for map visualization
+
+**Headers:**
+- `X-Session-ID`: Session identifier (required)
+
+### GET /api/v1/health
+Health check endpoint
+
+### Admin Endpoints
+- `POST /api/v1/admin/cleanup-expired`: Clean up expired sessions
+- `POST /api/v1/admin/reset`: Reset all data (for testing)
 
 ---
 
@@ -348,7 +374,7 @@ Edit `config/facility_mapping.json` to add known facility locations for your dem
 
 3. **Verify Claims**
    - Select a claim asserting emissions reduction
-   - System queries NASA FIRMS and GDELT
+   - System queries OpenWeatherMap and Google News
    - Evidence appears in right pane with map
 
 4. **View Risk Score**
@@ -360,7 +386,7 @@ Edit `config/facility_mapping.json` to add known facility locations for your dem
 
 Show a **visible contradiction** between:
 - A reported emissions reduction claim
-- A detected thermal anomaly or negative news spike near the facility
+- Detected poor air quality or negative news spike near the facility
 
 **Script:** "This is what an analyst used to spend days doing. The system does it in under a minute."
 

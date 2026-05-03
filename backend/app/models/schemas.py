@@ -55,9 +55,9 @@ class Evidence(BaseModel):
     """External evidence for a claim"""
     evidence_id: str
     claim_id: str
-    source: str = Field(description="Data source: NASA_FIRMS, GDELT, etc.")
+    source: str = Field(description="Data source: OPENWEATHERMAP, GOOGLE_NEWS, etc.")
     signal_type: str = Field(
-        description="thermal_anomaly, negative_news, no_data, etc."
+        description="poor_air_quality, negative_news, no_data, etc."
     )
     signal_text: str
     signal_strength: float = Field(
